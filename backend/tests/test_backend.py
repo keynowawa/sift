@@ -189,3 +189,30 @@ def test_model_configuration_change_requires_reindex(tmp_path):
         index(c,folder)
         assert c.get('/api/index').json()['searchable_files']==1
         assert m.chunks_embedded==1
+
+def test_cancel_long_file_between_embedding_batches(env):
+    c,m,p,_=env;folder=p/'files';folder.mkdir()
+    (folder/'a.txt').write_text('Laptop keyboard retained record')
+    index(c,folder)
+    (folder/'z.txt').write_text('Laptop keyboard long synthetic passage. '*1400)
+    m.delay=.05;before=m.embedding_calls
+    job=c.post('/api/index/start',json={'root':str(folder),'replace_index':False}).json()['job_id']
+    deadline=time.monotonic()+5
+    while m.embedding_calls==before:
+        assert time.monotonic()<deadline
+        time.sleep(.002)
+    assert c.post('/api/index/cancel',json={'job_id':job}).status_code==200
+    status=wait(c,job)
+    assert status['state']=='cancelled'
+    assert m.embedding_calls-before<=2, 'Cancellation continued embedding the entire long file'
+    assert c.get('/api/index').json()['searchable_files']==1
+
+def test_weak_ambiguous_semantic_matches_abstain_but_versions_do_not():
+    from app.retrieval import rank
+    def row(name, score, sign=1):
+        return {'file_id':name,'text':'Unrelated content','vector':[score,sign*(1-score**2)**.5]}
+    query=np.array([1.,0.])
+    assert rank('submarine reactor',query,[row('a',.56),row('b',.55,-1)],.53)==[]
+    # Similar copies are one content cluster, so they do not defeat separation.
+    versions=[row('a',.56),row('a2',.559),row('b',.40,-1)]
+    assert [r[1]['file_id'] for r in rank('bands performing live',query,versions,.53)]==['a','a2']

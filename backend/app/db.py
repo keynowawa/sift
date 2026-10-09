@@ -115,7 +115,7 @@ class Database:
                 FROM chunks JOIN files ON files.id=chunks.file_id
                 WHERE files.status='indexed' AND files.signature=?''', (signature,)).fetchall()
         return [dict(file_id=r['id'], name=r['name'], relative_path=r['rel_path'],
-            file_type=r['kind'], size_bytes=r['size'], modified_at=r['modified_at'],
+            file_type=r['kind'], size_bytes=r['size'], modified_at=r['modified_at'], mtime_ns=r['mtime_ns'],
             text=r['chunk_text'], page=r['page'], vector=json.loads(r['vector']))
             for r in rows if not kinds or r['kind'] in kinds]
 

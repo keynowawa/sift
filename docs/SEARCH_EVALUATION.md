@@ -71,4 +71,29 @@ The integration script binds port 8765 temporarily and terminates its server aft
 | held_out | nuclear submarine reactor maintenance schematic | none | none | True |
 | held_out | medieval sword metallurgy laboratory experiment | none | none | True |
 
-Not yet measured: real personal-folder benefit, manual-search comparison, non-English/Taglish retrieval, hundreds-file memory/time, Windows, and statistical generalization.
+Not yet measured: real personal-folder benefit, manual-search comparison, non-English/Taglish retrieval, Windows, and statistical generalization. The expanded synthetic scale test below is available.
+
+## Expanded corpus and ranking reliability follow-up
+
+300 synthetic files: 210 TXT, 45 MD, 15 text-layer PDFs, and 30 PNG screenshots. These are 15 variants of each of 20 base documents, not 300 independent documents. Generation/test code is `backend/evaluation/scale.py`; no personal source files were used. This test is not an independent accuracy benchmark.
+
+The original fixed similarity threshold returned unrelated resume records for the submarine query when repeated synthetic metadata was added. An ambiguity gate now rejects weak semantic matches unless they separate from a different content cluster. This preserves closely related variants and continues to use 0.53 as the per-result threshold. Constants: high-score cutoff 0.60, separation 0.08, variant cosine cutoff 0.92. These are engineering heuristics derived from observed failures; additional unseen-corpus validation is needed.
+
+The scale follow-up returns an empty result for that submarine query, while paraphrased receipt, plant-notes, and hotel queries still return the appropriate document families. Reference ZX1400 returns its exact matching record first but also weaker extra matches; the UI must show evidence, not claim all results are certainly relevant.
+
+| Operation | Latest measured result |
+|---|---|
+| Initial 300-file index | 48.50 seconds; 300 searchable; zero file failures |
+| Unchanged rescan | 0.707 seconds; zero new embedding calls |
+| Add one / change one / remove one | 0.967 seconds; exactly two new embedding calls; 300 searchable |
+| Cancel and resume after adding 100 new TXT files | cancelled successfully; resumed to 400 searchable in 3.309 seconds |
+| Python-process peak memory | 434.25 MiB, including OCR/TestClient; excludes Ollama |
+| Source files | SHA-256 hashes unchanged by indexing/search/rescans |
+
+Latest end-to-end TestClient search times: 276 ms, 127 ms, 142 ms, 128 ms, 178 ms. Earlier run: 334 ms, 172 ms, 173 ms, 228 ms, 279 ms. Database lookups per chunk were removed, but these observations are not a controlled speed benchmark; filesystem/model warm-up and load vary. Earlier initial indexing took 76.43 seconds; do not attribute that entire difference to the code changes.
+
+Cancellation of a long file was separately reproduced and fixed: old code kept running all nine embedding calls; new code checks cancellation between batches without committing incomplete file vectors. All 14 backend tests pass.
+
+The original “held-out” set has now been inspected during follow-up work and is a regression set, not fresh independent validation. Reproduce its regression with `backend/evaluation/benchmark.py --threshold 0.53`. Running the script without a fixed threshold selects a tuning optimum for that algorithm and does not automatically change backend configuration. No model was changed.
+
+Fixed-threshold regression after the ambiguity fix: semantic/hybrid 10/10 original test-set top-three hits and 2/2 no-match abstentions; tuning 4/5 hits and 2/2 abstentions. The lights-on query now returns no matches rather than the incorrect receipt. Cold request 1,843 ms, reported model load 1,778.11 ms, 20-file index 5,401 ms, mean query embedding 47.94 ms in that later run; timings vary with system load.

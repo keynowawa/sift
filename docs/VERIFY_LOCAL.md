@@ -38,4 +38,6 @@ PYTHONPATH=backend python backend/evaluation/integration.py
 
 The integration test uses a fresh temporary database and real loopback HTTP service, tests read-only source hashes and unchanged rescan caching, and deliberately opens/reveals a synthetic receipt. Generated corpora and raw results are ignored by Git; request/response records are in API_EXAMPLES.md. No personal files are required.
 
-Index reset removes Sift index/cache rows only; no secure-erasure guarantee. Native folder picking is unavailable on the tested interpreter; manual paths remain usable. Large-folder scale and independent user testing remain pending.
+Index reset removes Sift index/cache rows only; no secure-erasure guarantee. Native folder picking is unavailable on the tested interpreter; manual paths remain usable. A 300-file synthetic scale test and cancellation/resume to 400 files passed; independent user testing remains pending. The corpus repeats 20 base topics and does not establish real-world scale accuracy.
+
+Follow-up checks ran in `/private/tmp/sift-backend-venv` because the Documents environment contained offloaded dependency files. Physical offline and actual Windows verification are still pending. Retrieval abstention was corrected after an expanded-corpus false positive; see SEARCH_EVALUATION.md.

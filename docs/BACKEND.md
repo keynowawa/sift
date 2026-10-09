@@ -42,8 +42,31 @@ Missing OCR permits TXT/MD/PDF indexing and reports screenshot skips. Missing em
 
 ## Checks and limits
 
-12 backend tests passed, including lifecycle/caching, query calls/no-match, model failure, per-file failure, symlink/root checks, origin/host checks, cancellation/reset conflicts, restart interruption, safe desktop arguments, API-vs-HTML routing, duplicate filenames, read-only hashes, and configuration invalidation. Test inference is injected only inside tests, never selected by runtime environment/configuration. TestClient currently emits one upstream deprecation warning about httpx; tests still pass.
+14 backend tests passed, including lifecycle/caching, query calls/no-match, model failure, per-file failure, symlink/root checks, origin/host checks, cancellation/reset conflicts, restart interruption, safe desktop arguments, API-vs-HTML routing, duplicate filenames, read-only hashes, and configuration invalidation. Test inference is injected only inside tests, never selected by runtime environment/configuration. TestClient currently emits one upstream deprecation warning about httpx; tests still pass.
 
 Real integration: 20 searchable files + one unsupported synthetic JSON manifest; all 21 discovered records processed, zero failed files. An unchanged rescan reused embeddings. macOS open visibly verified; reveal successfully dispatched to Finder, but Finder selection was not visually inspected. No Windows OS action is claimed tested.
 
-Still incomplete: native folder picker; Windows runtime testing; several-hundred-file performance test; physical Wi-Fi-off test with browser and OS traffic inspection; scanned-PDF OCR/DOCX; broad real-world retrieval validation; clean-machine setup and frontend integration. No summaries, chat, date interpretation, cleanup, moves, undo, or generative model are implemented.
+Still incomplete: native folder picker; Windows runtime testing; physical Wi-Fi-off test with browser and OS traffic inspection; scanned-PDF OCR/DOCX; broad real-world retrieval validation; clean-machine setup and frontend integration. No summaries, chat, date interpretation, cleanup, moves, undo, or generative model are implemented.
+
+## Reliability follow-up (October 10)
+
+Cancellation now stops between embedding batches. A partial current file is not committed; previously committed files remain available and an incremental rescan retries the interrupted file. A regression test reproduced nine continued calls in the old implementation and verifies at most the in-flight batch can finish after cancellation.
+
+Search now rejects weak semantic matches that are ambiguous across different content clusters: highest similarity must be at least 0.60, or separated by at least 0.08 from the best different cluster. Candidate vectors with cosine similarity at least 0.92 to the best candidate are treated as near-identical variants for this check. The existing 0.53 per-result threshold remains unchanged. This is a heuristic, not calibrated confidence or a guarantee of empty results for all unrelated queries. The gate may reduce recall.
+
+Search validation uses modification metadata returned in the internal database query, avoiding one SQLite lookup per chunk. API fields remain identical; the internal mtime is not returned to frontend clients. See SEARCH_EVALUATION.md for the expanded-corpus measurements.
+
+### Local environment issue
+
+During the follow-up, macOS marked a required pydantic source file under the Documents `.venv` as `dataless`; process sampling showed imports blocked on a file read. The existing user-started server also timed out on `/api/index`. Its process was not stopped or changed. Relocating bytecode caches alone did not resolve dependency-source hydration.
+
+A separate Python 3.13.1 environment was installed successfully from the same pinned requirements at `/private/tmp/sift-backend-venv`, outside Documents. All 14 tests and real scale checks ran there. It is a temporary environment and may be removed after a reboot/cleanup; do not make it the distributed setup default. Builder B should keep installed dependencies outside cloud-offloaded folders when this issue occurs.
+
+To use the tested local environment now, stop the old server with Ctrl+C in its own Terminal, then from repo root:
+
+```bash
+source /private/tmp/sift-backend-venv/bin/activate
+python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8765
+```
+
+This retains the agreed launch command and default application-data index. A permanent non-cloud venv plus the pinned requirements is preferable for distribution.

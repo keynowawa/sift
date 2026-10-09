@@ -10,6 +10,10 @@ from .db import now
 from .extractors import Unsupported, chunks, file_type
 from .security import ApiError, scoped_file, validate_root
 
+class JobCancelled(Exception):
+    """Stop between batches without committing a partially embedded file."""
+
+
 class Scanner:
     def __init__(self, config, db, embedder, extractor):
         self.config, self.db, self.embedder, self.extractor = config, db, embedder, extractor
@@ -99,6 +103,7 @@ class Scanner:
                     kind=file_type(path), size=0, mtime_ns=0, modified_at=now(),
                     sha256='', signature=self.config.signature, status='skipped', error=None, text='', truncated=0)
                 parts = []
+                aborted = False
                 try:
                     path = scoped_file(root, relative)
                     stat = path.stat()
@@ -131,6 +136,8 @@ class Scanner:
                     pieces = list(chunks(bounded, self.config.chunk_chars, self.config.chunk_overlap))
                     body['phase'] = 'embedding'; save()
                     for offset in range(0, len(pieces), 8):
+                        if self.cancel_event.is_set():
+                            raise JobCancelled()
                         batch = pieces[offset:offset+8]
                         vectors = self.embedder.embed([text for _,text in batch])
                         parts.extend((page,text,vec) for (page,text),vec in zip(batch,vectors))
@@ -139,6 +146,9 @@ class Scanner:
                         raise OSError('File changed while being indexed; rescan it')
                     record['status'] = 'indexed'
                     body['searchable'] += 1
+                except JobCancelled:
+                    aborted = True
+                    break
                 except Unsupported as exc:
                     record['status'], record['error'] = 'skipped', str(exc)
                     body['skipped'] += 1; error(relative,str(exc)); parts = []
@@ -152,7 +162,7 @@ class Scanner:
                         break
                 finally:
                     # Cached files also count as processed; fatal model failure handled above.
-                    if body['state'] != 'failed':
+                    if body['state'] != 'failed' and not aborted:
                         body['processed'] += 1
                     save()
                 self.db.save_file(record,parts)

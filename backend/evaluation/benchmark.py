@@ -91,7 +91,7 @@ def evaluate(queries, rows, vectors, threshold, mode):
     return {'top3_hits':sum(r['correct'] for r in positives),'positive_queries':len(positives),
         'no_match_correct':sum(r['correct'] for r in negatives),'no_match_queries':len(negatives),'queries':records}
 
-def main():
+def main(threshold=None):
     generate(); embedder=Embedder(MODEL); extractor=Extractor()
     unload = embedder.client.post('/api/embed',json={'model':MODEL,'input':[],'keep_alive':0})
     unload.raise_for_status()
@@ -114,9 +114,11 @@ def main():
     def quality(th):
         r=evaluate(TUNING,rows,tune_vec,th,'hybrid')
         return r['top3_hits']/r['positive_queries']+r['no_match_correct']/r['no_match_queries']
-    threshold=max(candidates,key=lambda th:(quality(th),-th))
+    threshold_mode = 'tuning' if threshold is None else 'fixed regression'
+    if threshold is None:
+        threshold=max(candidates,key=lambda th:(quality(th),-th))
     report={'synthetic':True,'model':MODEL,'cold_request_ms':cold_ms,'ollama_load_ms':load_ms,'indexing_ms':indexing_ms,
-        'search_embedding_mean_ms':round(sum(timings)/len(timings),2),'threshold':threshold,'files':len(DOCS),'chunks':len(rows),
+        'search_embedding_mean_ms':round(sum(timings)/len(timings),2),'threshold':threshold,'threshold_mode':threshold_mode,'files':len(DOCS),'chunks':len(rows),
         'errors':errors,'results':{split:{mode:evaluate(q,rows,v,threshold,mode) for mode in ['keyword','semantic','hybrid']}
             for split,q,v in [('tuning',TUNING,tune_vec),('held_out',HELD,held_vec)]}}
     (BASE.parent/'results.json').write_text(json.dumps(report,indent=2))
@@ -125,4 +127,8 @@ def main():
         print(split,{mode:{k:v for k,v in values.items() if k!='queries'} for mode,values in modes.items()})
     embedder.close()
 
-if __name__=='__main__': main()
+if __name__=='__main__':
+    import argparse
+    parser=argparse.ArgumentParser()
+    parser.add_argument('--threshold',type=float,default=None)
+    main(parser.parse_args().threshold)

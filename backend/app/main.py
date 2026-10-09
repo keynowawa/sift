@@ -154,8 +154,7 @@ def create_app(config=None, embedder=None, extractor=None):
             try:
                 path=scoped_file(root,row['relative_path'])
                 stat=path.stat()
-                record=s.db.file(row['file_id'])
-                if stat.st_size==record['size'] and stat.st_mtime_ns==record['mtime_ns']:
+                if stat.st_size==row['size_bytes'] and stat.st_mtime_ns==row['mtime_ns']:
                     eligible.append(row)
             except (ApiError,OSError):
                 continue

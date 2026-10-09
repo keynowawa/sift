@@ -47,3 +47,4 @@ demo/generated/
 backend/evaluation/generated/
 backend/evaluation/results.json
 backend/evaluation/integration_results.json
+backend/evaluation/scale_results.json
