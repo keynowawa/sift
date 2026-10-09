@@ -1,0 +1,78 @@
+.chat-main{max-width:900px;padding:30px 24px 24px}
+.chat-hero{text-align:center;margin:0 0 22px}
+.chat-hero .eyebrow{font-size:9px}
+.chat-hero h1{font-family:Georgia,"Times New Roman",serif;font-size:clamp(31px,4vw,44px);font-weight:400;letter-spacing:-.045em;margin:10px 0 6px}
+.chat-hero h1 em{color:var(--green);font-weight:400}
+.chat-hero p{font-size:12px;color:var(--muted);margin:0}
+.conversation-shell{height:min(68vh,760px);min-height:500px;display:flex;flex-direction:column;overflow:hidden;background:var(--paper);border:1px solid #e7e7df;border-radius:17px;box-shadow:0 14px 42px rgba(42,57,45,.07)}
+.conversation-header{height:65px;flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:0 22px;border-bottom:1px solid #eeeee8}
+.assistant-identity{display:flex;align-items:center;gap:10px;min-width:0}
+.assistant-avatar{width:31px;height:31px;flex:0 0 auto;display:grid;place-items:center;border-radius:10px 10px 10px 3px;background:var(--green);color:#fff;font:italic 23px Georgia,serif}
+.assistant-identity>div{display:flex;flex-direction:column;gap:3px}
+.assistant-identity strong{font-size:12px;letter-spacing:-.01em}
+.assistant-identity>div>span{font-size:9px;color:#8b9690}
+.folder-chip{max-width:55%;display:flex;align-items:center;gap:8px;padding:8px 11px;border:1px solid #e2e5dc;border-radius:20px;background:#fff;color:#64736b;font-size:10px}
+.folder-chip>span:nth-child(2){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.folder-chip.has-index{background:#f3f6ef;color:#466a50;border-color:#dce7d8}
+.folder-chip .chevron{color:#89948d}
+.conversation-feed{flex:1;min-height:0;overflow-y:auto;padding:22px 26px 18px;scrollbar-color:#d9dfd7 transparent;scrollbar-width:thin}
+.welcome-message{display:flex;align-items:flex-start;gap:11px;margin:5px 0 20px}
+.small-avatar{width:27px;height:27px;font-size:20px}
+.welcome-copy{max-width:580px;padding:13px 15px;background:#f5f7f2;border:1px solid #ebeee6;border-radius:3px 12px 12px 12px}
+.welcome-copy>strong{font-size:12px;color:#33483c}
+.welcome-copy>p{font-size:11px;color:#728077;line-height:1.55;margin:5px 0 12px}
+.suggestion-list{display:flex;flex-wrap:wrap;gap:6px}
+.suggestion-list button{border:1px solid #e0e6dc;border-radius:20px;background:#fff;color:#536a5a;padding:7px 10px;font-size:10px}
+.suggestion-list button:hover{background:#edf3ea;border-color:#cddbc9}
+.controls-card{margin:2px 0 18px 38px;padding:17px 18px;border:1px solid #e5e8de;border-radius:11px;background:#fbfcf8;box-shadow:0 8px 22px rgba(27,50,33,.04)}
+.controls-heading{display:flex;align-items:center;justify-content:space-between;margin-bottom:15px}
+.controls-heading h2{font-size:14px;margin:4px 0 0;letter-spacing:-.02em}
+.controls-card form>label:not(.consent){display:block;color:#495a54;font-weight:650;font-size:10px;margin:0 0 7px}
+.controls-card .path-row input{font-size:11px;padding:10px}
+.controls-card .consent{margin:13px 0;font-size:10px}
+.controls-card .primary-button{font-size:10px;padding:9px 12px}
+.controls-card .index-summary{margin-top:14px;padding-top:13px}
+.filter-settings{border-top:1px solid #e9ebe4;margin-top:14px;padding-top:12px}
+.filter-settings .search-meta{margin:8px 0 0}
+.filter-settings .filter-note{margin-left:0}
+.chat-composer{flex:0 0 auto;margin:0 18px 16px;border:1px solid #dfe3da;border-radius:13px;background:#fff;box-shadow:0 5px 18px rgba(30,48,36,.05);padding:9px 10px 8px 15px}
+.composer-input-row{display:flex;align-items:center;gap:10px}
+.composer-input-row input{min-width:0;flex:1;border:0;outline:0!important;background:transparent;color:var(--ink);font-size:13px;padding:9px 1px;box-shadow:none!important}
+.composer-input-row input::placeholder{color:#9aa59e}
+.send-button{display:grid;place-items:center;flex:0 0 auto;width:34px;height:34px;border:0;border-radius:10px 10px 10px 3px;background:var(--green);color:white;font-size:21px;font-weight:600;line-height:1}
+.send-button:hover:not(:disabled){background:var(--green-dark)}
+.composer-tools{display:flex;align-items:center;gap:12px;border-top:1px solid #f0f1eb;margin-top:4px;padding-top:7px;color:#929c95;font-size:9px}
+.tool-button{display:flex;align-items:center;gap:5px;border:0;background:transparent;color:#60796a;padding:3px 0;font-size:10px;font-weight:650}
+.tool-button:hover{color:var(--green-dark)}
+.tool-button>span{font-size:15px}
+.composer-privacy{display:flex;align-items:center;gap:5px;margin-left:auto}
+.composer-privacy .footer-dot{width:5px;height:5px}
+.search-turn{margin:20px 0 10px}
+.user-message{display:flex;flex-direction:column;align-items:flex-end;gap:5px;margin-bottom:17px}
+.user-message>span{font-size:9px;color:#8a958e;padding-right:3px}
+.user-message p{max-width:82%;margin:0;background:#eaf0e7;color:#344e3c;border-radius:13px 3px 13px 13px;padding:10px 14px;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
+.search-turn .results-head{padding-top:15px}
+.search-turn .indexing-note{margin:0 0 12px 38px}
+.search-turn .results-list{margin-left:38px}
+.search-turn .empty-state{margin-left:38px}
+.conversation-feed>.alert{margin-bottom:12px}
+.conversation-feed .inline-error{margin:10px 0 10px 38px}
+.conversation-feed>.progress-card{margin:10px 0 14px 38px}
+.chat-main footer{margin-top:15px;padding-top:12px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:650px){
+  .chat-main{padding:24px 12px 18px}
+  .chat-hero{margin-bottom:16px}
+  .chat-hero h1{font-size:34px}
+  .conversation-shell{height:calc(100vh - 210px);min-height:420px;border-radius:13px}
+  .conversation-header{height:58px;padding:0 13px}
+  .folder-chip{max-width:58%;padding:7px 9px;font-size:9px}
+  .conversation-feed{padding:16px 12px}
+  .controls-card{margin:0 0 14px;padding:14px}
+  .search-turn .results-list,.search-turn .empty-state,.conversation-feed>.progress-card,.conversation-feed .inline-error{margin-left:0}
+  .chat-composer{margin:0 9px 10px;padding-left:11px}
+  .composer-tools{gap:8px}
+  .composer-tools>span:nth-child(2){overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .composer-privacy{display:none}
+  .suggestion-list button{font-size:9px}
+}
