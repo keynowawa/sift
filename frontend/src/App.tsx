@@ -15,6 +15,7 @@ const timeGreeting = () => {
   if (hour >= 12 && hour < 17) return 'Hello'
   return 'Good evening'
 }
+type OnboardingStep = 'profile' | 'scan' | 'progress'
 
 export default function App() {
   const [health, setHealth] = useState<Health | null>(null)
@@ -25,7 +26,11 @@ export default function App() {
   const [folder, setFolder] = useState('')
   const [consented, setConsented] = useState(false)
   const [userName, setUserName] = useState(() => { try { return localStorage.getItem('sift-user-name') ?? 'Gab' } catch { return 'Gab' } })
-  const [onboardingComplete, setOnboardingComplete] = useState(() => { try { return localStorage.getItem('sift-onboarded') === 'true' } catch { return false } })
+  const [onboardingComplete, setOnboardingComplete] = useState(() => {
+    if (new URLSearchParams(window.location.search).get('setup') === '1') return false
+    try { return localStorage.getItem('sift-onboarded') === 'true' } catch { return false }
+  })
+  const [onboardingStep, setOnboardingStep] = useState<OnboardingStep>('profile')
   // Keep access history in memory only; file names and paths can be sensitive.
   const [fileHistory, setFileHistory] = useState<FileHistoryItem[]>([])
   const [busy, setBusy] = useState(false)
@@ -133,6 +138,10 @@ export default function App() {
   useEffect(() => { void refresh() }, [refresh])
 
   useEffect(() => {
+    if (!onboardingComplete && jobId) setOnboardingStep('progress')
+  }, [jobId, onboardingComplete])
+
+  useEffect(() => {
     if (!jobId) return
     let live = true
     const poll = async () => {
@@ -160,19 +169,39 @@ export default function App() {
     } catch (e) { setActionError(message(e)) }
   }
 
-  function finishOnboarding(e: FormEvent) {
+  function continueOnboarding(e: FormEvent) {
     e.preventDefault()
     const name = userName.trim()
-    const root = folder.trim()
     if (!name) { setActionError('Enter a name to personalize Sift.'); return }
-    if (!root) { setActionError('Choose a folder for Sift to index.'); return }
-    if (!consented) { setActionError('Confirm that Sift may read this folder to build a local index.'); return }
+    setUserName(name)
+    setActionError('')
+    setOnboardingStep('scan')
+  }
+
+  async function startOnboardingScan(e: FormEvent) {
+    e.preventDefault()
+    const root = health?.platform === 'windows' ? 'C:\\' : health?.platform === 'macos' ? '/' : ''
+    if (!root) { setActionError('Full system-drive scanning is available on Windows and macOS only.'); return }
+    if (!consented) { setActionError('Confirm that Sift may scan supported files on this system drive.'); return }
+    if (setupRequired) { setActionError('Complete the local model setup before starting a scan.'); return }
+    if (busy || jobId) return
+    const replacing = Boolean(summary?.root && summary.root !== root)
+    if (replacing && !window.confirm(`This replaces the current index for “${summary?.root}” with a scan of “${root}”. Continue?`)) return
+    setBusy(true); setActionError(''); setNotice(''); setJob(null)
     try {
-      localStorage.setItem('sift-user-name', name)
+      const started = await api.startIndex(root, replacing)
+      setFolder(root)
+      setJobId(started.job_id); setCancelRequested(false)
+      setOnboardingStep('progress')
+    } catch (e) { setActionError(message(e)) }
+    finally { setBusy(false) }
+  }
+
+  function finishOnboarding() {
+    try {
+      localStorage.setItem('sift-user-name', userName.trim())
       localStorage.setItem('sift-onboarded', 'true')
     } catch { /* onboarding still completes for this session */ }
-    setUserName(name)
-    setFolder(root)
     setOnboardingComplete(true)
     setControlsOpen(true)
     setPanelExpanded(true)
@@ -253,23 +282,47 @@ export default function App() {
     </header>
 
     <main id="top" className="chat-main">
-      {!onboardingComplete ? <section className="onboarding-page">
-        <span className="onboarding-step">WELCOME TO SIFT · SETUP</span>
-        <h1>Let’s make this yours.</h1>
-        <p className="onboarding-intro">Choose a name and one folder to start. Sift searches locally and never changes your original files.</p>
-        <form className="onboarding-form" onSubmit={finishOnboarding}>
-          <label htmlFor="user-name">What should we call you?</label>
-          <input id="user-name" value={userName} onChange={event => setUserName(event.target.value)} placeholder="Your name" autoComplete="given-name" maxLength={60} />
-          <label htmlFor="onboarding-folder">Which folder may Sift access?</label>
-          <div className="path-row"><input id="onboarding-folder" value={folder} onChange={event => setFolder(event.target.value)} placeholder={health?.platform === 'windows' ? 'C:\\Users\\you\\Documents' : '/Users/you/Documents'} autoComplete="off" /><button type="button" className="secondary-button" onClick={() => void chooseFolder()} disabled={!health?.capabilities.folder_picker}>Browse</button></div>
-          {!health?.capabilities.folder_picker && <p className="field-hint">Enter the full folder path. The folder picker is unavailable.</p>}
-          <label className="consent onboarding-consent"><input type="checkbox" checked={consented} onChange={event => setConsented(event.target.checked)} /><span>I allow Sift to read this folder to build a private, local index. I can change the folder later.</span></label>
+      {!onboardingComplete ? <section className={`onboarding-page onboarding-stage-${onboardingStep}`}>
+        <div className="onboarding-progress" role="progressbar" aria-label="Setup progress" aria-valuemin={1} aria-valuemax={3} aria-valuenow={onboardingStep === 'profile' ? 1 : onboardingStep === 'scan' ? 2 : 3} aria-valuetext={`Step ${onboardingStep === 'profile' ? 1 : onboardingStep === 'scan' ? 2 : 3} of 3`}>
+          <span className="onboarding-progress-fill" style={{ width: onboardingStep === 'profile' ? '33.333%' : onboardingStep === 'scan' ? '66.667%' : '100%' }} />
+        </div>
+        {onboardingStep === 'profile' && <>
+          <span className="onboarding-step">STEP 1 · YOUR PROFILE</span>
+          <h1>Let’s make this yours.</h1>
+          <p className="onboarding-intro">First, what should Sift call you?</p>
+          <form className="onboarding-form" onSubmit={continueOnboarding}>
+            <label htmlFor="user-name">Your name</label>
+            <input id="user-name" value={userName} onChange={event => setUserName(event.target.value)} placeholder="Your name" autoComplete="given-name" maxLength={60} />
+            {actionError && <p className="inline-error" role="alert">{actionError}</p>}
+            <button className="primary-button onboarding-continue" type="submit">Next <span aria-hidden="true">→</span></button>
+          </form>
+        </>}
+
+        {onboardingStep === 'scan' && <>
+          <span className="onboarding-step">STEP 2 · PC SCAN</span>
+          <h1>Scan this PC</h1>
+          <p className="onboarding-intro">Sift can search supported documents and images across your system drive. Scanning runs locally; original files are never changed or uploaded.</p>
+          <div className="onboarding-scan-scope"><span className="brand-mark scan-scope-icon" aria-hidden="true"><SiftLogo /></span><span><strong>Entire system drive</strong><small>{health?.platform === 'windows' ? 'C:\\' : health?.platform === 'macos' ? '/' : 'Checking platform…'}</small></span></div>
+          <form className="onboarding-form" onSubmit={startOnboardingScan}>
+            <label className="consent onboarding-consent"><input type="checkbox" checked={consented} onChange={event => setConsented(event.target.checked)} /><span>I allow Sift to read supported files across this system drive and build a private, local search index.</span></label>
+            {actionError && <p className="inline-error" role="alert">{actionError}</p>}
+            {healthError && <p className="inline-error" role="alert">{healthError}</p>}
+            {setupRequired && health && <div className="onboarding-model-note"><strong>Local model setup needed before scanning</strong>{health.setup_steps.map((step, index) => <p key={index}>{step}</p>)}</div>}
+            <div className="onboarding-actions"><button className="secondary-button" type="button" onClick={() => { setActionError(''); setOnboardingStep('profile') }}>Back</button><button className="primary-button onboarding-continue" type="submit" disabled={busy || Boolean(jobId) || setupRequired || !health || !consented}>{busy ? 'Starting scan…' : 'Scan my PC'} <span aria-hidden="true">→</span></button></div>
+          </form>
+          <p className="onboarding-privacy"><span className="footer-dot" /> This can take a while on a large drive. Protected files may be unavailable.</p>
+        </>}
+
+        {onboardingStep === 'progress' && <div className="onboarding-scan-progress" role="status" aria-live="polite">
+          <div className="chat-hero onboarding-orb-stage"><div className={`sift-orb${jobId ? ' is-searching' : ''}`} role="img" aria-label={jobId ? 'Sift is scanning your PC' : 'Sift scan orb'}><SiftOrb /></div></div>
+          <span className="onboarding-step">STEP 3 · LOCAL SCAN</span>
+          <h1>{job?.state === 'completed' ? 'Your PC is ready.' : job?.state === 'failed' ? 'The scan stopped.' : job?.state === 'cancelled' || job?.state === 'interrupted' ? 'The scan was paused.' : 'Sift is looking through your PC.'}</h1>
+          <p className="onboarding-intro">{job?.current_file ? job.current_file : job?.state === 'completed' ? `Sift found ${job.searchable} searchable files.` : job?.state === 'failed' ? 'Check the local model and connection, then try again.' : 'Finding supported files and building your private local index.'}</p>
+          {job && !terminal.has(job.state) && <><div className="onboarding-scan-track"><span style={{ width: job.discovered > 0 ? `${Math.min(100, job.processed / job.discovered * 100)}%` : '8%' }} /></div><p className="onboarding-scan-count">{job.discovered > 0 ? `${job.processed} processed · ${job.discovered} found` : 'Finding files…'}{job.searchable > 0 ? ` · ${job.searchable} searchable` : ''}</p></>}
+          {job && terminal.has(job.state) && <p className="onboarding-scan-count">{job.searchable} searchable · {job.skipped} skipped · {job.failed} failed</p>}
           {actionError && <p className="inline-error" role="alert">{actionError}</p>}
-          {healthError && <p className="inline-error" role="alert">{healthError}</p>}
-          {setupRequired && health && <div className="onboarding-model-note"><strong>Local model setup needed before indexing</strong>{health.setup_steps.map((step, index) => <p key={index}>{step}</p>)}</div>}
-          <button className="primary-button onboarding-continue" type="submit">Continue to Sift <span aria-hidden="true">→</span></button>
-        </form>
-        <p className="onboarding-privacy"><span className="footer-dot" /> Your name is saved on this device. Your files stay in the folder you choose.</p>
+          <div className="onboarding-actions onboarding-progress-actions">{job && !terminal.has(job.state) && <button className="secondary-button" type="button" onClick={() => void cancelIndex()} disabled={cancelRequested}>{cancelRequested ? 'Cancel requested' : 'Cancel scan'}</button>}{job?.state === 'completed' && <button className="primary-button onboarding-continue" type="button" onClick={finishOnboarding}>Continue to Sift <span aria-hidden="true">→</span></button>}{job && ['failed', 'cancelled', 'interrupted'].includes(job.state) && <button className="secondary-button" type="button" onClick={() => { setActionError(''); setOnboardingStep('scan') }}>Back to scan options</button>}</div>
+        </div>}
       </section> : <>
       <section className="chat-hero">
         <div className={`sift-orb${searching ? ' is-searching' : ''}`} role="img" aria-label={searching ? 'Sift is searching your files' : 'Sift search orb'}><SiftOrb /></div>
