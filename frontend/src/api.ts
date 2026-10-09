@@ -1,12 +1,33 @@
-import type { ApiError, Health, IndexStatus, IndexSummary, Preview, SearchResponse } from './types'
+import type { ApiError, Health, IndexStatus, IndexSummary, Preview, SearchResponse, SearchResult } from './types'
 
 export const fixtureMode = import.meta.env.DEV && import.meta.env.VITE_SIFT_DEV_FIXTURES === 'true'
-const demoFile = {
-  file_id: 'file_001', name: 'IMG_2034.png', relative_path: 'receipts/IMG_2034.png',
-  file_type: 'png', size_bytes: 128400, modified_at: '2026-06-12T08:30:00Z',
-  snippet: 'Laptop repair: replacement keyboard. Total PHP 2,500.',
-  location: { page: null }, match_kind: 'hybrid' as const,
-}
+const demoSamples: Array<{ file: SearchResult; terms: string[]; preview: string }> = [
+  {
+    file: { file_id: 'file_001', name: 'IMG_2034.png', relative_path: 'receipts/IMG_2034.png', file_type: 'png', size_bytes: 128400, modified_at: '2026-06-12T08:30:00Z', snippet: 'Laptop repair: replacement keyboard. Total PHP 2,500.', location: { page: null }, match_kind: 'hybrid' },
+    terms: ['laptop', 'repair', 'keyboard', 'receipt', '2500', '2,500'],
+    preview: 'Laptop repair\nReplacement keyboard\nTotal PHP 2,500\n\nDEVELOPMENT SAMPLE — synthetic content for interface review only.',
+  },
+  {
+    file: { file_id: 'file_002', name: 'biology-review.md', relative_path: 'school/biology-review.md', file_type: 'md', size_bytes: 4620, modified_at: '2024-08-19T12:00:00Z', snippet: 'Photosynthesis uses chlorophyll to convert light into stored chemical energy.', location: { page: null }, match_kind: 'semantic' },
+    terms: ['biology', 'photosynthesis', 'chlorophyll', 'class', 'study'],
+    preview: 'Biology review\nPhotosynthesis uses chlorophyll to convert light into stored chemical energy.\n\nDEVELOPMENT SAMPLE — synthetic content for interface review only.',
+  },
+  {
+    file: { file_id: 'file_003', name: 'hotel-booking.txt', relative_path: 'travel/hotel-booking.txt', file_type: 'txt', size_bytes: 2380, modified_at: '2023-03-04T09:15:00Z', snippet: 'Booking confirmed: three nights in Kyoto, check-in on April 18.', location: { page: null }, match_kind: 'keyword' },
+    terms: ['hotel', 'booking', 'travel', 'kyoto', 'confirmation'],
+    preview: 'Hotel booking confirmation\nThree nights in Kyoto\nCheck-in: April 18\n\nDEVELOPMENT SAMPLE — synthetic content for interface review only.',
+  },
+  {
+    file: { file_id: 'file_004', name: 'monthly-budget.pdf', relative_path: 'home/finance/monthly-budget.pdf', file_type: 'pdf', size_bytes: 34820, modified_at: '2022-11-22T16:45:00Z', snippet: 'Monthly budget notes: rent, transit, groceries, and savings goals.', location: { page: 2 }, match_kind: 'hybrid' },
+    terms: ['budget', 'finance', 'rent', 'savings', 'expenses'],
+    preview: 'Monthly budget\nRent, transit, groceries, and savings goals.\n\nDEVELOPMENT SAMPLE — synthetic content for interface review only.',
+  },
+  {
+    file: { file_id: 'file_005', name: 'garden-notes.txt', relative_path: 'hobbies/garden-notes.txt', file_type: 'txt', size_bytes: 1910, modified_at: '2021-05-11T07:00:00Z', snippet: 'Tomatoes need steady sun, deep watering, and support as the plants grow.', location: { page: null }, match_kind: 'semantic' },
+    terms: ['garden', 'tomato', 'plants', 'watering', 'hobby'],
+    preview: 'Garden notes\nTomatoes need steady sun, deep watering, and support as the plants grow.\n\nDEVELOPMENT SAMPLE — synthetic content for interface review only.',
+  },
+]
 
 export class ApiFailure extends Error {
   code: string
@@ -68,14 +89,15 @@ function fixtureResponse(path: string, init: RequestInit): unknown {
   if (path === '/search') {
     const payload = JSON.parse(String(init.body ?? '{}')) as { query?: string }
     const query = payload.query?.toLowerCase() ?? ''
-    const results = /laptop|repair|keyboard|receipt|2500|2,500/.test(query) ? [demoFile] : []
+    const results = demoSamples.filter(sample => sample.terms.some(term => query.includes(term))).map(sample => sample.file)
     return { results, elapsed_ms: 180, searchable_files: 24, index_in_progress: false } satisfies SearchResponse
   }
-  if (path.endsWith('/preview')) return {
-    file_id: 'file_001', name: demoFile.name, relative_path: demoFile.relative_path, file_type: 'png',
-    text: 'Laptop repair\nReplacement keyboard\nTotal PHP 2,500\n\nDEVELOPMENT SAMPLE — synthetic content for interface review only.',
-    truncated: false,
-  } satisfies Preview
+  if (path.endsWith('/preview')) {
+    const fileId = decodeURIComponent(path.slice('/files/'.length, path.lastIndexOf('/')))
+    const sample = demoSamples.find(item => item.file.file_id === fileId)
+    if (!sample) throw new ApiFailure('That sample file is unavailable.', 'FIXTURE_FILE_NOT_FOUND', false, 404)
+    return { file_id: sample.file.file_id, name: sample.file.name, relative_path: sample.file.relative_path, file_type: sample.file.file_type, text: sample.preview, truncated: false } satisfies Preview
+  }
   if (path.endsWith('/open') || path.endsWith('/reveal')) return { ok: true }
   throw new ApiFailure('This action is not included in development fixture mode.', 'FIXTURE_UNAVAILABLE', false)
 }
