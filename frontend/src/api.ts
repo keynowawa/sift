@@ -29,6 +29,12 @@ const demoSamples: Array<{ file: SearchResult; terms: string[]; preview: string 
   },
 ]
 
+export const fixtureStorageFiles = demoSamples.map(({ file }) => ({
+  relative_path: file.relative_path,
+  file_type: file.file_type,
+  size_bytes: file.size_bytes,
+}))
+
 export class ApiFailure extends Error {
   code: string
   retryable: boolean

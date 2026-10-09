@@ -283,6 +283,7 @@ export default function App() {
 
     <main id="top" className="chat-main">
       {!onboardingComplete ? <section className={`onboarding-page onboarding-stage-${onboardingStep}`}>
+        {onboardingStep === 'scan' && <button className="onboarding-back-arrow" type="button" onClick={() => { setActionError(''); setOnboardingStep('profile') }} aria-label="Back to name step" title="Back to name step"><span aria-hidden="true">←</span></button>}
         <div className="onboarding-progress" role="progressbar" aria-label="Setup progress" aria-valuemin={1} aria-valuemax={3} aria-valuenow={onboardingStep === 'profile' ? 1 : onboardingStep === 'scan' ? 2 : 3} aria-valuetext={`Step ${onboardingStep === 'profile' ? 1 : onboardingStep === 'scan' ? 2 : 3} of 3`}>
           <span className="onboarding-progress-fill" style={{ width: onboardingStep === 'profile' ? '33.333%' : onboardingStep === 'scan' ? '66.667%' : '100%' }} />
         </div>
@@ -299,18 +300,21 @@ export default function App() {
         </>}
 
         {onboardingStep === 'scan' && <>
-          <span className="onboarding-step">STEP 2 · PC SCAN</span>
-          <h1>Scan this PC</h1>
-          <p className="onboarding-intro">Sift can search supported documents and images across your system drive. Scanning runs locally; original files are never changed or uploaded.</p>
+          <div className="onboarding-scan-hero">
+            <span className="onboarding-step">STEP 2 · PC SCAN</span>
+            <div className="chat-hero onboarding-orb-stage onboarding-welcome-orb"><div className="sift-orb" role="img" aria-label="Sift scan orb"><SiftOrb /></div></div>
+            <h1>Welcome to Sift</h1>
+            <p className="onboarding-intro">Start with a thorough scan of your PC. Sift searches supported files locally and never changes or uploads your originals.</p>
+          </div>
           <div className="onboarding-scan-scope"><span className="brand-mark scan-scope-icon" aria-hidden="true"><SiftLogo /></span><span><strong>Entire system drive</strong><small>{health?.platform === 'windows' ? 'C:\\' : health?.platform === 'macos' ? '/' : 'Checking platform…'}</small></span></div>
           <form className="onboarding-form" onSubmit={startOnboardingScan}>
             <label className="consent onboarding-consent"><input type="checkbox" checked={consented} onChange={event => setConsented(event.target.checked)} /><span>I allow Sift to read supported files across this system drive and build a private, local search index.</span></label>
+            <p className="onboarding-privacy"><span className="footer-dot" /> This can take a while on a large drive. Protected files may be unavailable.</p>
             {actionError && <p className="inline-error" role="alert">{actionError}</p>}
             {healthError && <p className="inline-error" role="alert">{healthError}</p>}
             {setupRequired && health && <div className="onboarding-model-note"><strong>Local model setup needed before scanning</strong>{health.setup_steps.map((step, index) => <p key={index}>{step}</p>)}</div>}
-            <div className="onboarding-actions"><button className="secondary-button" type="button" onClick={() => { setActionError(''); setOnboardingStep('profile') }}>Back</button><button className="primary-button onboarding-continue" type="submit" disabled={busy || Boolean(jobId) || setupRequired || !health || !consented}>{busy ? 'Starting scan…' : 'Scan my PC'} <span aria-hidden="true">→</span></button></div>
+            <div className="onboarding-scan-actions"><button className="primary-button onboarding-scan-start" type="submit" disabled={busy || Boolean(jobId) || setupRequired || !health || !consented} aria-label={busy ? 'Starting scan' : 'Scan my PC'}><span>{busy ? '…' : 'Scan'}</span></button></div>
           </form>
-          <p className="onboarding-privacy"><span className="footer-dot" /> This can take a while on a large drive. Protected files may be unavailable.</p>
         </>}
 
         {onboardingStep === 'progress' && <div className="onboarding-scan-progress" role="status" aria-live="polite">
