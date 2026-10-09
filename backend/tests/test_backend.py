@@ -216,3 +216,61 @@ def test_weak_ambiguous_semantic_matches_abstain_but_versions_do_not():
     # Similar copies are one content cluster, so they do not defeat separation.
     versions=[row('a',.56),row('a2',.559),row('b',.40,-1)]
     assert [r[1]['file_id'] for r in rank('bands performing live',query,versions,.53)]==['a','a2']
+
+def test_fusion_groups_best_chunk_and_rejects_weak_lexical_overlap():
+    from app.retrieval import rank
+    rows=[{'file_id':'one','text':'Unrelated preface','page':1,'vector':[0.,1.]},
+          {'file_id':'one','text':'Kitchen pipe leak repair invoice','page':2,'vector':[1.,0.]},
+          {'file_id':'two','text':'Office invoice','page':1,'vector':[0.,1.]}]
+    hits=rank('pipe leak invoice',np.array([1.,0.]),rows)
+    assert len(hits)==1 and hits[0][1]['page']==2
+    assert hits[0][1]['text']=='Kitchen pipe leak repair invoice'
+    # A shared word alone cannot bypass the calibrated fused cutoff.
+    assert rank('office reactor',np.array([0.,0.,1.]),
+        [dict(rows[2],vector=[1.,0.,0.])],min_fused_score=.4)==[]
+
+def test_mac_action_guards_and_manual_picker_fallback(env):
+    import sys
+    if sys.platform!='darwin': pytest.skip('macOS actions only; Windows is untested')
+    import fcntl
+    c,_,p,_=env; folder=p/'root ü space';folder.mkdir()
+    for sub in ['one','two']:
+        (folder/sub).mkdir();(folder/sub/'same ü $(literal).txt').write_text('Laptop keyboard '+sub)
+    assert c.post('/api/folder/pick',json={}).status_code==503
+    assert index(c,folder)['state']=='completed'  # Manual path still works after picker failure.
+    hits=c.post('/api/search',json={'query':'computer'}).json()['results']
+    assert len(hits)==2
+    with patch('app.desktop.subprocess.run') as run:
+        for hit in hits:
+            for action in ['open','reveal']:
+                assert c.post(f"/api/files/{hit['file_id']}/{action}",json={}).status_code==200
+                assert run.call_args.args[0][-1]==str(folder/hit['relative_path'])
+                assert run.call_args.kwargs['shell'] is False
+        target=folder/hits[0]['relative_path']; run.reset_mock()
+        with target.open('rb') as handle:
+            fcntl.flock(handle,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            assert c.post(f"/api/files/{hits[0]['file_id']}/open",json={}).status_code==503
+        run.assert_not_called()
+        target.chmod(0)
+        try: assert c.post(f"/api/files/{hits[0]['file_id']}/reveal",json={}).status_code==503
+        finally: target.chmod(0o600)
+        outside=p/'outside.txt';outside.write_text('Laptop outside')
+        target.unlink();target.symlink_to(outside)
+        assert c.post(f"/api/files/{hits[0]['file_id']}/open",json={}).status_code==400
+        other=p/'other';other.mkdir();(other/'same.txt').write_text('Laptop new root')
+        assert index(c,other,True)['state']=='completed'
+        assert c.post(f"/api/files/{hits[1]['file_id']}/reveal",json={}).status_code==404
+
+def test_mac_action_rejects_replaced_root_and_dispatch_failure(tmp_path):
+    import sys
+    import subprocess
+    if sys.platform!='darwin': pytest.skip('macOS actions only')
+    root=tmp_path/'root';root.mkdir();target=root/'file.txt';target.write_text('Synthetic document')
+    with patch('app.desktop.subprocess.run',side_effect=subprocess.TimeoutExpired('open',10)):
+        with pytest.raises(ApiError) as error: desktop.act(target,root=root)
+        assert error.value.code=='DESKTOP_ACTION_FAILED'
+    moved=tmp_path/'moved';root.rename(moved);root.symlink_to(moved,target_is_directory=True)
+    with patch('app.desktop.subprocess.run') as run:
+        with pytest.raises(ApiError) as error: desktop.act(target,root=root)
+        assert error.value.code=='INVALID_ROOT'
+        run.assert_not_called()

@@ -1,4 +1,90 @@
-# Local retrieval evaluation
+# Retrieval evaluation — Phase A4/A5, 2026-10-10
+
+Synthetic, hand-authored evidence only. v1 responses are unchanged: no numeric scores or confidence percentages are exposed. Search can return `results: []`; result limits are applied only after acceptance and file aggregation.
+
+## Current fusion and abstention
+
+`backend/app/retrieval.py` computes BM25 per source chunk (k1=1.2, b=.75). IDF counts distinct files containing each query token, so extra chunks do not multiply document frequency. Query tokens are unique, lowercased, with the existing stop words removed. Normalize BM25 as L=B/(B+2); fuse F=0.8*cosine+0.2*L. Cosine uses normalized float32 Ollama embeddings.
+
+Accept a chunk only if F>=0.35 AND either (a) cosine>=0.53 with the existing semantic ambiguity gate, or (b) at least half of unique query tokens occur in that chunk and BM25>0. The ambiguity gate allows the best cosine>=0.60 or a gap>=0.08 from the best different content cluster; chunks with cosine>=0.92 to the best chunk are treated as copies for this comparison. This gate applies to semantic eligibility, not the keyword route. These internal cutoffs are heuristics, not probabilities.
+
+Sort accepted chunks by fused score, then stable file ID/page/text ties. Keep the maximum-scoring accepted chunk for each file; its real source text and page become the snippet/location. Apply top-k to distinct accepted files. No arbitrary result is added to fill k. Long files cannot occupy multiple results, though their extra chances to match can still bias max-chunk aggregation.
+
+## Calibration and split integrity
+
+Reproducer: `PYTHONPATH=backend python backend/evaluation/phase_a4.py`, using the installed local `nomic-embed-text:v1.5`, unchanged prefixes/context/model digest documented below. Eighteen new short synthetic TXT-equivalent passages are embedded through actual Ollama; this isolates retrieval and does not retest OCR/PDF extraction. Eight positive plus five no-match tuning queries are separate from ten positive plus five final held-out queries. All labels and query lists are committed in the script.
+
+Retain cosine threshold 0.53. Grid: keyword weights 0.20/0.35/0.50 and fused cutoffs 0.35/0.40/0.45/0.50/0.55/0.60. Objective = positive top-3 fraction + 2*correct no-match fraction, emphasizing abstention; ties prefer the original weight, then lowest cutoff. Selected w=0.20, F=0.35; tuning yielded 8/8 positives and 5/5 abstentions. At w=.20, cutoffs .35 through .50 tied; .55 lost two positives and .60 lost three. The sample does not identify a uniquely optimal cutoff.
+
+An initial exploratory run also included cutoff zero, which tied on tuning; it retrieved all ten exploratory positives but falsely matched a duck recipe to the bread recipe. We then required a nonzero fused cutoff and authored a new held-out query list before running it. The initial list is explicitly `EXPLORATORY`, never presented as pristine held-out evidence. Final parameters were frozen before final held-out embeddings/results, and were not changed after seeing its failures. The final held-out queries are still authored by the implementer after exploration, not an independent blind benchmark. The original 20-file evaluation below is historical regression evidence, not fresh held-out data.
+
+| Split | Method | Positive top-3 hits | Correct no-match abstentions |
+|---|---|---|---|
+| tuning | keyword | 4/8 | 2/5 |
+| tuning | semantic | 8/8 | 5/5 |
+| tuning | hybrid | 8/8 | 5/5 |
+| held_out | keyword | 9/10 | 1/5 |
+| held_out | semantic | 10/10 | 4/5 |
+| held_out | hybrid | 10/10 | 4/5 |
+| exploratory | keyword | 5/10 | 1/5 |
+| exploratory | semantic | 10/10 | 4/5 |
+| exploratory | hybrid | 10/10 | 4/5 |
+
+Hybrid ties semantic-only on this sample; fusion has no demonstrated advantage here. Final held-out false match: “insurance policy for an aircraft” returns car insurance (i.txt) and employee onboarding (f.txt). Exploratory false match: “recipe for roasting a duck” returns bread (h.txt). All positive final targets were retrieved, but these absent-topic false matches show that successful easy no-match queries do not establish reliable abstention. No topic-specific exceptions were added. Keyword misses the final paraphrase “where the bride and groom celebrate.”
+
+## Final held-out query record
+
+| Query | Target | Hybrid top three | Correct |
+|---|---|---|---|
+| coverage for damage to my vehicle | i.txt | i.txt, p.txt, c.txt | True |
+| exercises for playing the piano | j.txt | j.txt, q.txt, h.txt | True |
+| signup for beginner swimming instruction | k.txt | k.txt, f.txt | True |
+| consular appointment renewal requirements | l.txt | l.txt, f.txt | True |
+| notes on volcanic eruptions | m.txt | m.txt | True |
+| how many boxes are in the warehouse | n.txt | n.txt | True |
+| where the bride and groom celebrate | o.txt | o.txt | True |
+| fiber connection repair report | p.txt | p.txt, c.txt | True |
+| morning mindfulness routine | q.txt | q.txt | True |
+| cleaning mineral deposits from a coffee boiler | r.txt | r.txt, m.txt, b.txt | True |
+| wedding dress sewing pattern | none | none | True |
+| telescope lens manufacturing specification | none | none | True |
+| warehouse forklift operator license | none | none | True |
+| insurance policy for an aircraft | none | i.txt, f.txt | False |
+| dinosaur fossil excavation map | none | none | True |
+
+## Phase A5 final scale follow-up
+
+After the telemetry opt-out correction, the real 300-file scale test ran with OS-enforced external-network denial except loopback. Index: 30,818 harness ms (30,706 job ms), 300 searchable, zero failed/skipped; peak Python RSS 596.56 MiB excluding Ollama. Searches: 194/135/144/165/125 ms. Unchanged rescan: 596 ms, zero embedding calls. Change/add/delete: 656 ms, two calls. Cancel succeeded; resume reached 400 searchable in 2,768 ms. These are measured on this Mac and differ from earlier warm runs; no optimization or total-system RAM claim follows. Full composition/byte sizes and protocol are in VERIFY_LOCAL.md. Fusion/parameters and held-out results were not changed based on these follow-up searches.
+
+## Current performance and desktop checks
+
+Ranking only, 30 calls on this macOS 26.1 M1/8 GB machine, using repeated **real** passage vectors/text. This is a controlled ranking-cost test, not 300 independent source topics, inference throughput, or HTTP latency.
+
+| Distinct files | Chunks | Median ranking ms | p95 ranking ms |
+|---|---|---|---|
+| 300 | 300 | 1.79 | 2.91 |
+| 300 | 1200 | 7.63 | 9.56 |
+
+Updated real 300-file workload (`backend/evaluation/scale.py`): 210 TXT, 45 MD, 15 text PDFs and 30 PNGs, using 15 variants of 20 base topics. Indexing took 35,563 ms. Five TestClient end-to-end searches took 218/152/182/219/174 ms, including real query embeddings, database access and ranking. The submarine no-match returned empty; the receipt/hotel/plants targets ranked first. The exact synthetic reference query returned its intended file first, with weaker neighboring results also present. This is not an independent 300-topic accuracy test or real HTTP network latency. Unchanged rescan: 694 ms and zero embedding calls. Change/add/delete rescan: 575 ms and two embedding calls. Cancel/resume reached 400 searchable files in 5,615 ms on resume. Source hashes were unchanged; Python peak RSS was 458.91 MiB, excluding Ollama. These timings are one warm run, not an optimization claim or performance guarantee.
+
+Brute-force NumPy remains appropriate at this measured scale. Both matrix-vector cosine passes, tokenization, BM25, filtering, sorting and file grouping are included. Matrix construction is included; SQLite fetch and query embedding are excluded. Repeated content and warm caches limit generalization.
+
+17 backend tests pass, preserving response field checks, caching, model failures and cancellation. New cases test best source chunk/page, explicit weak-match rejection, spaces/Unicode/literal shell punctuation, duplicate filenames, missing files, unsupported types, symlink escapes, unreadable and exclusively advisory-locked files, replaced roots, root switching/stale IDs, dispatch timeout, and picker failure followed by manual indexing. OS dispatch is mocked in unit tests; locks and permissions are real macOS checks.
+
+`backend/evaluation/desktop_smoke.py` separately performed four real macOS dispatches (open/reveal for duplicate names in two subfolders with spaces/Unicode/punctuation). All succeeded; hashes stayed unchanged. Missing/unsupported/symlink/replaced-root actions were rejected, as were exclusive advisory locks and mode-000 unreadable files. Success proves OS dispatch, not that Finder selection or application contents were visually inspected in this run. Actual macOS applications may still show their own errors after asynchronous dispatch.
+
+Open/reveal lock index root changes, then resolve the current ID, validate current root/containment/existence/type, open a read-only non-following handle, check regular-file identity, and dispatch. macOS uses argument arrays with shell=False; Windows uses os.startfile and native Shell PIDLs ([Microsoft API documentation](https://learn.microsoft.com/en-us/windows/win32/api/shlobj_core/nf-shlobj_core-shopenfolderandselectitems)). Windows code was reviewed but not executed, and no Windows tests are claimed. The external OS filename handoff still has a narrow race against another process replacing files/directories after validation; the index lock only serializes Sift root changes. Advisory-lock checking cannot detect applications that ignore advisory locks. macOS Finder's Locked attribute is not equivalent to an exclusive open lock; read-only documents remain eligible for opening.
+
+Folder picker remains unavailable in this runtime; a 503 reports manual path entry as the fallback. Backend manual entry is tested after failure; frontend UI behavior is outside this backend change.
+
+Tests/evaluations used `/private/tmp/sift-backend-venv` (same pinned requirements, Python 3.13.1) because the original Documents venv has cloud-offloaded files. One existing upstream TestClient/httpx deprecation warning remains. Source data and the user's running server were not changed.
+
+---
+
+# Historical evaluation (before Phase A4)
+
+The following measurements and tables describe earlier code. They are retained for traceability and are not substituted for the current evaluation above.
+
 
 Synthetic data only; not a real-world accuracy claim. Corpus generator and benchmark: `backend/evaluation/benchmark.py`. Generated data/results are ignored by Git.
 

@@ -12,7 +12,7 @@ class ApiError(Exception):
 
 
 def has_symlink(path):
-    return any(p.is_symlink() for p in (path, *path.parents))
+    return any(p.is_symlink() or getattr(p, 'is_junction', lambda: False)() for p in (path, *path.parents))
 
 def validate_root(value, data_dir):
     path = Path(value).expanduser()
@@ -36,7 +36,10 @@ def validate_root(value, data_dir):
 
 
 def scoped_file(root, relative):
-    path = Path(root) / relative
+    root = Path(root)
+    if not root.is_absolute() or has_symlink(root) or not root.is_dir():
+        raise ApiError('INVALID_ROOT', 'The selected root changed or is no longer a regular directory.', 409)
+    path = root / relative
     if Path(relative).is_absolute() or '..' in Path(relative).parts or has_symlink(path):
         raise ApiError('FILE_OUTSIDE_ROOT', 'File is outside the selected root or is a symlink.')
     try:

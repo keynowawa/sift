@@ -48,3 +48,5 @@ backend/evaluation/generated/
 backend/evaluation/results.json
 backend/evaluation/integration_results.json
 backend/evaluation/scale_results.json
+backend/evaluation/phase_a4_results.json
+backend/evaluation/offline_results.json

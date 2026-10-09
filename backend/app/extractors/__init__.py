@@ -1,3 +1,10 @@
+import os
+
+# Local-only runtime: opt out before any native ONNX initialization. The Python
+# API alone can be too late for the minimal initialization event on macOS.
+# https://github.com/microsoft/onnxruntime/blob/main/docs/Privacy.md
+os.environ['ORT_DISABLE_TELEMETRY'] = '1'
+
 from pathlib import Path
 import threading
 import importlib.util
@@ -34,6 +41,8 @@ class Extractor:
             raise Unsupported('Local OCR dependencies/models unavailable')
         with self.lock:
             if self.engine is None:
+                import onnxruntime
+                onnxruntime.disable_telemetry_events()
                 import rapidocr
                 base = Path(rapidocr.__file__).parent / 'models'
                 # Explicit bundled paths prevent runtime model downloads.

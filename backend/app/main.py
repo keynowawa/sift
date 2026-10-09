@@ -179,12 +179,18 @@ def create_app(config=None, embedder=None, extractor=None):
 
     @app.post('/api/files/{file_id}/open')
     def open_file(file_id: str, body: Empty, request: Request):
-        _,path=get_file(request,file_id); desktop.act(path)
+        s=state(request)
+        with s.scanner.lock:
+            _,path=get_file(request,file_id)
+            desktop.act(path,root=s.db.meta('root'))
         return {'ok':True}
 
     @app.post('/api/files/{file_id}/reveal')
     def reveal(file_id: str, body: Empty, request: Request):
-        _,path=get_file(request,file_id); desktop.act(path,reveal=True)
+        s=state(request)
+        with s.scanner.lock:
+            _,path=get_file(request,file_id)
+            desktop.act(path,reveal=True,root=s.db.meta('root'))
         return {'ok':True}
 
     @app.get('/api/activity')

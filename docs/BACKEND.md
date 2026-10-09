@@ -1,8 +1,8 @@
-# Sift backend — Checkpoint B handoff
+# Sift backend — Phase A5 handoff
 
 ## Status
 
-Implemented locally on `backend-search`. Nothing pushed externally. All v1 endpoints retain the supplied field names and shapes. A real HTTP integration run indexed TXT/MD, a text-layer PDF, and PNG screenshots, queried the real Ollama embedding model, previewed a matching TXT, dispatched macOS open/reveal, and verified unchanged source hashes. TextEdit's actual receipt window was inspected successfully.
+Implemented locally on `backend-search`. All v1 endpoints retain the supplied field names and shapes. A real HTTP integration run indexed TXT/MD, a text-layer PDF, and PNG screenshots, queried the real Ollama embedding model, previewed a matching TXT, dispatched macOS open/reveal, and verified unchanged source hashes. TextEdit's actual receipt window was inspected successfully.
 
 Tested environment: macOS 26.1 / Apple M1 CPU (8 cores), Apple M1 GPU (8 cores, Metal), 8 GB RAM. Project `.venv` uses Python 3.13.1. Homebrew's default Python changed to 3.14.8 during the user's installation; use the tested venv rather than recreating it with an unverified interpreter. Windows has not been run or verified.
 
@@ -42,11 +42,11 @@ Missing OCR permits TXT/MD/PDF indexing and reports screenshot skips. Missing em
 
 ## Checks and limits
 
-14 backend tests passed, including lifecycle/caching, query calls/no-match, model failure, per-file failure, symlink/root checks, origin/host checks, cancellation/reset conflicts, restart interruption, safe desktop arguments, API-vs-HTML routing, duplicate filenames, read-only hashes, and configuration invalidation. Test inference is injected only inside tests, never selected by runtime environment/configuration. TestClient currently emits one upstream deprecation warning about httpx; tests still pass.
+17 backend tests passed, including lifecycle/caching, query calls/no-match, model failure, per-file failure, symlink/root checks, origin/host checks, cancellation/reset conflicts, restart interruption, safe desktop arguments, API-vs-HTML routing, duplicate filenames, read-only hashes, and configuration invalidation. Test inference is injected only inside tests, never selected by runtime environment/configuration. TestClient currently emits one upstream deprecation warning about httpx; tests still pass.
 
 Real integration: 20 searchable files + one unsupported synthetic JSON manifest; all 21 discovered records processed, zero failed files. An unchanged rescan reused embeddings. macOS open visibly verified; reveal successfully dispatched to Finder, but Finder selection was not visually inspected. No Windows OS action is claimed tested.
 
-Still incomplete: native folder picker; Windows runtime testing; physical Wi-Fi-off test with browser and OS traffic inspection; scanned-PDF OCR/DOCX; broad real-world retrieval validation; clean-machine setup and frontend integration. No summaries, chat, date interpretation, cleanup, moves, undo, or generative model are implemented.
+Still incomplete: native folder picker; Windows runtime testing; browser integration and OS traffic observation during physical offline operation; scanned-PDF OCR/DOCX; broad real-world retrieval validation; clean-machine setup and frontend integration. No summaries, chat, date interpretation, cleanup, moves, undo, or generative model are implemented.
 
 ## Reliability follow-up (October 10)
 
@@ -60,7 +60,7 @@ Search validation uses modification metadata returned in the internal database q
 
 During the follow-up, macOS marked a required pydantic source file under the Documents `.venv` as `dataless`; process sampling showed imports blocked on a file read. The existing user-started server also timed out on `/api/index`. Its process was not stopped or changed. Relocating bytecode caches alone did not resolve dependency-source hydration.
 
-A separate Python 3.13.1 environment was installed successfully from the same pinned requirements at `/private/tmp/sift-backend-venv`, outside Documents. All 14 tests and real scale checks ran there. It is a temporary environment and may be removed after a reboot/cleanup; do not make it the distributed setup default. Builder B should keep installed dependencies outside cloud-offloaded folders when this issue occurs.
+A separate Python 3.13.1 environment was installed successfully from the same pinned requirements at `/private/tmp/sift-backend-venv`, outside Documents. All backend tests and real scale checks ran there. It is a temporary environment and may be removed after a reboot/cleanup; do not make it the distributed setup default. Builder B should keep installed dependencies outside cloud-offloaded folders when this issue occurs.
 
 To use the tested local environment now, stop the old server with Ctrl+C in its own Terminal, then from repo root:
 
@@ -70,3 +70,27 @@ python -m uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8765
 ```
 
 This retains the agreed launch command and default application-data index. A permanent non-cloud venv plus the pinned requirements is preferable for distribution.
+
+## Phase A4 retrieval and desktop hardening
+
+Fusion is 0.8*cosine + 0.2*BM25/(BM25+2), with file-based IDF, a tuning-selected fused cutoff 0.35 and retained semantic cutoff/ambiguity checks. Unique-token lexical coverage must reach .5 for the keyword acceptance route. Group accepted chunks by file and expose the best source chunk/page, never scores or confidence percentages. Acceptance precedes top-k. See SEARCH_EVALUATION.md for separate tuning/held-out results, false matches and ranking measurements. NumPy brute-force remains in place.
+
+Open/reveal serialize active-root changes, revalidate the current ID/root/path/type/existence, reject symlinks/junctions and nonregular or unreadable files, compare file identity, and dispatch through macOS argument arrays or Windows native APIs. macOS exclusive advisory locks yield a retryable desktop error. A narrow external filesystem race remains at the OS path handoff; this is not an atomic capability-based launch. Windows remains untested. Folder-picker failure still permits manual absolute-path indexing; picker capability remains false.
+
+Optional real macOS synthetic-document action test: `PYTHONPATH=backend python backend/evaluation/desktop_smoke.py`. It launches the default text application and Finder; temporary documents are removed afterward. New split evaluation: `PYTHONPATH=backend python backend/evaluation/phase_a4.py`; no cold model unload. Generated result JSON is ignored.
+
+## Phase A5 verified handoff (October 10, 2026)
+
+The final 17-test suite covers every Phase A5 category; see VERIFY_LOCAL.md for the test-to-requirement map. Genuine HTTP integration runs in a separate real Uvicorn process with real Ollama and fresh nonce-bearing sources, independently of stub-based tests. Latest 300-file scale measurements include counts, byte sizes, generation, failure counts, caching and cancel/resume. Search evaluation retains the known false matches; no new features were added.
+
+All 40 requirements are exactly pinned in `backend/requirements.txt`. Installed versions matched all pins and `pip check` reported no broken requirements. Key runtime pins: FastAPI 0.143.0, uvicorn 0.54.0, numpy 2.5.3, pypdf 6.20.0, RapidOCR 3.10.0, ONNX Runtime 1.31.0, Pillow 12.3.0. Ollama 0.40.2 is a separately installed native prerequisite, not a pip requirement. Selected model remains `nomic-embed-text:v1.5`, F16, digest `0a109f422b47e3a30ba2b10eca18548e944e8a23073ee3f3e947efcf3c45e59f`; query/document prefixes remain `search_query: ` and `search_document: `. No dependency/model download occurred in the verification runs.
+
+**Network finding and correction:** OS nettop attributed an external HTTPS connection to the original OCR backend process. This is consistent with [ONNX Runtime's documented default telemetry](https://github.com/microsoft/onnxruntime/blob/main/docs/Privacy.md); the encrypted payload was not inspected, so do not assert what it contained. The extractor now forces `ORT_DISABLE_TELEMETRY=1` before native initialization and calls `disable_telemetry_events()` before OCR sessions. This is a local-only behavior correction, not an API or feature change. Fresh inference/index/query tests pass with OS-enforced outbound denial except loopback. This does not establish unrestricted post-fix zero egress. A later user-run local-copy test passed with Wi-Fi/Ethernet/VPN disconnected according to the user; its real saved index/query responses were inspected. No OS observer or browser UI ran during that physical offline retry; see VERIFY_LOCAL.md. Existing running servers must be restarted to load this correction.
+
+Builder B: use the manual folder field while `folder_picker:false`; treat completed jobs with nonzero failed/skipped counts as partial success; preserve empty results and retryable errors; display source excerpts rather than numeric confidence. Current backend checkout has no frontend build, so frontend end-to-end and browser traffic proof are pending. Exact launch command remains the default 8765 command above; evaluation defaults to isolated 8766 with matching `SIFT_PORT`. Do not point the frontend at a deleted temporary test index or reuse example IDs.
+
+Disclosures author: actual local embedding and bundled OCR were measured on this Mac; synthetic corpora, dependencies, models and AI assistance must be disclosed. Do not claim Windows testing, independent retrieval validation, independently observed physical offline/browser behavior, or verified zero external requests. The discovered pre-fix external HTTPS connection and corrective telemetry configuration belong in the honest development/verification history.
+
+### Physical offline retry handoff
+
+The user-confirmed disconnected run passed from `/private/tmp/sift-offline-check`, with the existing preinstalled venv and models: six supported files searchable, all 25 HTTP/assertion checks passed, initial indexing 2,874 ms, unchanged rescan 15 ms with zero new embeddings. The deliberately malformed TXT and unsupported JSON remain expected error/skip fixtures. Cloud-offloaded source files in Documents caused the first attempt to fail during import; all application source as well as dependencies must be locally materialized. No product code changed for that setup repair. Full browser/OS traffic proof and actual Windows testing remain pending.

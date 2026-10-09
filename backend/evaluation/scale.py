@@ -31,7 +31,8 @@ def start(c,root):
 
 def main():
     report={'synthetic':True,'files':300,'composition':{},'distinct_base_topics':20,
-        'limitations':'15 variants of each of 20 hand-authored base documents; not 300 independent real-world documents.'}
+        'limitations':'15 variants of each of 20 hand-authored base documents; not 300 independent real-world documents.',
+        'generation':'15 copies of benchmark.DOCS; opaque filenames in batch subfolders; each passage gains copy-specific number, reference and amount. Minimal text-layer PDF writer; Pillow 1100x600 white PNG, font size 23; UTF-8 TXT/MD.'}
     with tempfile.TemporaryDirectory(prefix='sift-scale-') as temp:
         temp=Path(temp).resolve();root=temp/'corpus';root.mkdir()
         for copy in range(15):
@@ -47,6 +48,11 @@ def main():
                 else:path.write_text(content)
                 report['composition'][ext]=report['composition'].get(ext,0)+1
         before=snapshots(root)
+        report['sizes_bytes']={}
+        for ext in report['composition']:
+            sizes=[p.stat().st_size for p in root.rglob('*'+ext)]
+            report['sizes_bytes'][ext]={'count':len(sizes),'min':min(sizes),'max':max(sizes),'total':sum(sizes)}
+        report['total_source_bytes']=sum(s['total'] for s in report['sizes_bytes'].values())
         config=Config(data_dir=temp/'index');model=Embedder(config.model)
         with TestClient(create_app(config,model),base_url='http://127.0.0.1:8765') as c:
             t=time.perf_counter();status=wait(c,start(c,root))
@@ -85,6 +91,7 @@ def main():
                 time.sleep(.002)
             cancel=c.post('/api/index/cancel',json={'job_id':job})
             report['cancel_request_status']=cancel.status_code
+            report['cancel_request_response']=cancel.json()
             assert cancel.status_code==200,cancel.text
             report['cancelled_job']=wait(c,job)
             assert report['cancelled_job']['state']=='cancelled'
