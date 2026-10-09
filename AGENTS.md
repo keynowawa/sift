@@ -11,3 +11,4 @@ Read README.md and the relevant builder guide in docs/ before making changes. Th
 - Avoid committing personal files, generated indexes, secrets, dependencies, or local caches.
 - Run checks appropriate to each change and report results. Windows and macOS support each require actual verification.
 - Do not edit the other builder's owned files without coordination.
+- Before implementing frontend features, animations, or production-readiness changes, consult [docs/FRONTEND_SKILLS.md](docs/FRONTEND_SKILLS.md) and follow its workflow and checklists.
