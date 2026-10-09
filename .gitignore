@@ -42,3 +42,8 @@ demo/generated/
 # Local assistant settings
 .codex/
 .agents/
+
+# Backend evaluation artifacts (recreate from benchmark)
+backend/evaluation/generated/
+backend/evaluation/results.json
+backend/evaluation/integration_results.json
